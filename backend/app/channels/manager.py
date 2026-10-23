@@ -41,16 +41,14 @@ class ChannelManager:
 
     def init_channels(self) -> None:
         """Initialize channels from config. Call after construction."""
-        from app.channels.registry import discover_all
+        from app.channels.registry import load_channel_class
 
-        for name, cls in discover_all().items():
-            section = self.config.channels.get(name)
-            if section is None:
-                continue
+        for name, section in self.config.channels.items():
             enabled = section.get("enabled", False)
             if not enabled:
                 continue
             try:
+                cls = load_channel_class(name)
                 channel = cls(section, self.bus)
                 self.channels[name] = channel
                 logger.info("%s channel enabled", cls.display_name)

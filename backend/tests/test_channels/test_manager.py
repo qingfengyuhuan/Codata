@@ -61,3 +61,39 @@ async def test_dynamic_channel_starts_outbound_dispatcher():
     assert channel.sent[0].content == "hello"
 
     await manager.stop_all()
+
+
+async def test_startup_does_not_import_unconfigured_channel_sdks(monkeypatch):
+    from app.channels import registry
+
+    def reject_discovery():
+        pytest.fail("Startup must not import every channel SDK")
+
+    monkeypatch.setattr(registry, "discover_all", reject_discovery)
+    manager = ChannelManager(ChannelsConfig(), MessageBus())
+    manager.init_channels()
+    assert manager.channels == {}
+
+
+async def test_startup_imports_only_enabled_channels(monkeypatch):
+    from app.channels import registry
+
+    loaded = []
+
+    def load_channel(name):
+        loaded.append(name)
+        return DummyChannel
+
+    monkeypatch.setattr(registry, "load_channel_class", load_channel)
+    monkeypatch.setattr(
+        registry, "discover_all",
+        lambda: pytest.fail("Startup must not scan disabled channel SDKs"),
+    )
+    config = ChannelsConfig(channels={
+        "telegram": {"enabled": True},
+        "feishu": {"enabled": False},
+    })
+    manager = ChannelManager(config, MessageBus())
+    manager.init_channels()
+    assert loaded == ["telegram"]
+    assert list(manager.channels) == ["telegram"]
